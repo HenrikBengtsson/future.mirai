@@ -9,7 +9,7 @@
 #' @keywords internal
 #' @importFrom parallelly availableCores
 #' @importFrom future getGlobalsAndPackages MultiprocessFuture
-#' @importFrom mirai daemons
+#' @importFrom mirai call_mirai_ daemons make_cluster
 #' @export
 MiraiFuture <- function(expr = NULL,
                         substitute = TRUE,
@@ -42,8 +42,7 @@ MiraiFuture <- function(expr = NULL,
   if (is.function(workers)) workers <- workers()
   if (!is.null(workers)) stop_if_not(length(workers) >= 1)
 
-  cluster <- NULL
-  if (is.numeric(workers)) {
+  cluster <- if (is.numeric(workers)) {
     stop_if_not(length(workers) == 1L, !is.na(workers), workers >= 1)
       
     ## Do we need to change the number of mirai workers?
@@ -52,7 +51,7 @@ MiraiFuture <- function(expr = NULL,
       daemons(n = 0L)
     } else if (workers != nworkers) {
       daemons(n = 0L)  ## reset is required
-      daemons(n = workers, dispatcher = TRUE)
+      make_cluster(n = workers)
     }
   } else if (is.character(workers)) {
     stop_if_not(length(workers) >= 1L, !anyNA(workers))
@@ -65,9 +64,8 @@ MiraiFuture <- function(expr = NULL,
     }
     if (length(workers) != n) {
       daemons(n = 0L)  ## reset is required
-      daemons(n = length(workers), url = "ws://:0", dispatcher = TRUE)
+      make_cluster(n = length(workers))
     }
-    cluster <- launch_mirai_daemons(workers)
   } else if (!is.null(workers)) {
     stop("Argument 'workers' should be a numeric scalar or a character vector: ", mode(workers))
   }
@@ -164,11 +162,9 @@ result.MiraiFuture <- function(future, ...) {
   }
 
   mirai <- future[["mirai"]]
-  while (unresolved(mirai)) {
-    Sys.sleep(0.1)
-  }
+  call_mirai_(mirai)
   
-  result <- mirai$data
+  result <- mirai[["data"]]
   future[["result"]] <- result
   future[["state"]] <- "finished"
 
